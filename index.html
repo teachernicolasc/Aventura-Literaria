@@ -170,14 +170,19 @@
         </div>
 
         <!-- Pantalla Final -->
-        <div id="screen-end" class="hidden flex-col items-center justify-center flex-grow p-8 text-center bg-gradient-to-b from-yellow-50 to-white">
-            <h1 class="text-5xl font-black text-yellow-500 mb-4">¡Felicidades! 🎉</h1>
+        <div id="screen-end" class="hidden flex-col items-center justify-center flex-grow p-8 text-center bg-gradient-to-b from-yellow-50 to-white overflow-y-auto">
+            <h1 class="text-5xl font-black text-yellow-500 mb-4 mt-8">¡Felicidades! 🎉</h1>
             <p class="text-2xl text-slate-700 font-bold mb-6">Has completado todos los desafíos.</p>
-            <div class="bg-white p-6 rounded-3xl shadow-lg border-4 border-yellow-200 mb-8">
+            <div class="bg-white p-6 rounded-3xl shadow-lg border-4 border-yellow-200 mb-8 w-full max-w-md">
                 <p class="text-xl text-slate-500 font-bold uppercase tracking-wide">Puntuación Final</p>
                 <p id="final-score" class="text-6xl font-black text-blue-600 mt-2">30/30</p>
             </div>
-            <button onclick="resetGame()" class="bg-blue-500 hover:bg-blue-600 text-white text-2xl font-black py-4 px-10 rounded-full shadow-[0_8px_0_#2563eb] hover:shadow-[0_4px_0_#2563eb] hover:translate-y-1 transition-all">
+
+            <!-- Contenedor de Feedback -->
+            <div id="feedback-container" class="bg-blue-50 p-6 rounded-2xl border-2 border-blue-200 text-left mb-8 w-full max-w-xl hidden">
+            </div>
+
+            <button onclick="resetGame()" class="bg-blue-500 hover:bg-blue-600 text-white text-2xl font-black py-4 px-10 rounded-full shadow-[0_8px_0_#2563eb] hover:shadow-[0_4px_0_#2563eb] hover:translate-y-1 transition-all mb-8">
                 Volver a Jugar
             </button>
         </div>
@@ -229,6 +234,8 @@
         let currentIndex = 0;
         let score = 0;
         let isAnimating = false;
+        let currentQuestionFailed = false; // Indica si ya se equivocó en la pregunta actual
+        let mistakes = []; // Guarda los errores para el feedback final
 
         // --- REFERENCIAS AL DOM ---
         const screenStart = document.getElementById('screen-start');
@@ -254,6 +261,33 @@
         function startGame() {
             currentIndex = 0;
             score = 0;
+            mistakes = [];
+            updateHUD();
+            screenStart.classList.add('hidden');
+            screenEnd.classList.add('hidden');
+            screenGame.classList.remove('hidden');
+            screenGame.classList.add('flex');
+            loadQuestion();
+        }
+
+        function resetGame() {
+            startGame();
+        }
+
+        function updateHUD() {
+            progressText.innerText = `${currentIndex + 1} / ${allChallenges.length}`;
+            progressBar.style.width = `${((currentIndex) / allChallenges.length) * 100}%`;
+            scoreText.innerText = `⭐ ${score}`;
+        }
+
+        function loadQuestion() {
+            if (currentIndex >= allChallenges.length) {
+                endGame();
+                return;
+            }
+
+            isAnimating = false;
+            currentQuestionFailed = false; // Reiniciamos el estado de error al cargar nueva pregunta
             updateHUD();
             screenStart.classList.add('hidden');
             screenEnd.classList.add('hidden');
@@ -415,20 +449,36 @@
             if (isCorrect) {
                 // Éxito
                 element.classList.add('animate-bounce-success');
-                score++;
+                
+                // Solo suma puntos si la responde bien a la primera
+                if (!currentQuestionFailed) {
+                    score++;
+                }
+                
                 scoreText.innerText = `⭐ ${score}`;
                 scoreText.classList.add('scale-150', 'text-green-500');
                 setTimeout(() => scoreText.classList.remove('scale-150', 'text-green-500'), 300);
+
+                // Esperar y pasar a la siguiente (Solo si es correcta)
+                setTimeout(() => {
+                    currentIndex++;
+                    loadQuestion();
+                }, 1200);
             } else {
                 // Error
                 element.classList.add('animate-shake-error');
-            }
+                
+                if (!currentQuestionFailed) {
+                    currentQuestionFailed = true;
+                    mistakes.push(allChallenges[currentIndex]); // Registramos qué le costó
+                }
 
-            // Esperar y pasar a la siguiente
-            setTimeout(() => {
-                currentIndex++;
-                loadQuestion();
-            }, 1200); // 1.2 segundos para que el niño vea qué pasó
+                // Esperar a que termine la animación roja y dejarlo intentar de nuevo
+                setTimeout(() => {
+                    element.classList.remove('animate-shake-error');
+                    isAnimating = false; 
+                }, 600);
+            }
         }
 
         // --- FIN DEL JUEGO ---
@@ -438,15 +488,46 @@
             screenEnd.classList.remove('hidden');
             screenEnd.classList.add('flex');
             
-            document.getElementById('final-score').innerText = `${score} / ${allChallenges.length}`;
+            const finalScoreEl = document.getElementById('final-score');
+            finalScoreEl.innerText = `${score} / ${allChallenges.length}`;
             
             // Efecto visual final dependiendo del puntaje
+            finalScoreEl.className = 'text-6xl font-black mt-2 ';
             if(score === allChallenges.length) {
-                document.getElementById('final-score').classList.add('text-green-500');
+                finalScoreEl.classList.add('text-green-500');
             } else if (score > allChallenges.length * 0.6) {
-                document.getElementById('final-score').classList.add('text-blue-500');
+                finalScoreEl.classList.add('text-blue-500');
             } else {
-                document.getElementById('final-score').classList.add('text-orange-500');
+                finalScoreEl.classList.add('text-orange-500');
+            }
+
+            // --- GENERAR FEEDBACK ---
+            const feedbackContainer = document.getElementById('feedback-container');
+            feedbackContainer.innerHTML = '';
+            
+            if (mistakes.length === 0) {
+                feedbackContainer.classList.add('hidden');
+            } else {
+                feedbackContainer.classList.remove('hidden');
+                
+                let feedbackHTML = '<h3 class="text-xl font-black text-blue-800 mb-4">💡 Para seguir mejorando:</h3><ul class="flex flex-col gap-3 text-slate-700 font-bold text-sm md:text-base">';
+                
+                const hasWordMistakes = mistakes.some(m => m.type === 'ImageWord');
+                const hasTextMistakes = mistakes.some(m => m.type === 'TextType');
+                const hasBookMistakes = mistakes.some(m => m.type === 'BookCover');
+
+                if (hasWordMistakes) {
+                    feedbackHTML += '<li class="flex items-start gap-2 bg-white p-3 rounded-lg shadow-sm border border-blue-100"><span class="text-2xl">👀</span><span><strong>Lectura con cuidado:</strong> Vuelve a practicar leyendo las palabras fijándote muy bien en cada letra (cuidado con palabras parecidas como sopa y sapo).</span></li>';
+                }
+                if (hasTextMistakes) {
+                    feedbackHTML += '<li class="flex items-start gap-2 bg-white p-3 rounded-lg shadow-sm border border-blue-100"><span class="text-2xl">📄</span><span><strong>Forma de los textos:</strong> Observa la silueta de lejos. Los poemas son cortitos, las noticias tienen títulos grandes e imágenes, y las recetas tienen listas paso a paso.</span></li>';
+                }
+                if (hasBookMistakes) {
+                    feedbackHTML += '<li class="flex items-start gap-2 bg-white p-3 rounded-lg shadow-sm border border-blue-100"><span class="text-2xl">📚</span><span><strong>Partes del libro:</strong> Recuerda que el <em>Título</em> es el nombre del libro (letra más grande) y el <em>Autor</em> es el nombre de la persona que lo escribió.</span></li>';
+                }
+
+                feedbackHTML += '</ul>';
+                feedbackContainer.innerHTML = feedbackHTML;
             }
         }
 
